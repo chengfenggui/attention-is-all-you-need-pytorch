@@ -4,45 +4,38 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformer.Modules import ScaledDotProductAttention
 
-__author__ = "Yu-Hsiang Huang"
-
 
 class MultiHeadAttention(nn.Module):
     ''' Multi-Head Attention module '''
 
-    def __init__(self, n_head, d_model, d_k, d_v, dropout=0.1):
+    def __init__(self, n_head, d_feature=32, d_model=32, dropout=0.1):
         super().__init__()
 
         self.n_head = n_head
-        self.d_k = d_k
-        self.d_v = d_v
 
-        self.w_qs = nn.Linear(d_model, n_head * d_k, bias=False)
-        self.w_ks = nn.Linear(d_model, n_head * d_k, bias=False)
-        self.w_vs = nn.Linear(d_model, n_head * d_v, bias=False)
-        self.fc = nn.Linear(n_head * d_v, d_model, bias=False)
-
-        self.attention = ScaledDotProductAttention(temperature=d_k ** 0.5)
+        self.conv_qs = nn.Conv2d(d_feature, n_head * d_model, kernel_size=1)
+        self.conv_ks = nn.Conv2d(d_feature, n_head * d_model, kernel_size=1)
+        self.conv_vs = nn.Conv2d(d_feature, n_head * d_model, kernel_size=1)
 
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
 
-    def forward(self, q, k, v, mask=None):
-        d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
-        sz_b, len_q, len_k, len_v = q.size(0), q.size(1), k.size(1), v.size(1)
+    def forward(self, f_q, f_k, f_v, mask=None):
+        # input feature maps size: b, lq, c, h, w
+        n_head = self.n_head
+        sz_b, len_q, len_k, len_v = f_q.size(0), f_q.size(1), f_k.size(1), f_v.size(1)
+        c, h, w = f_q.size(2), f_q.size(3), f_q.size(4)
 
-        residual = q
+        residual = f_q
 
-        # Pass through the pre-attention projection: b x lq x (n*dv)
+        # Pass through the pre-attention projection: b x lq x n x c x h x w
         # Separate different heads: b x lq x n x dv
-        q = self.w_qs(q).view(sz_b, len_q, n_head, d_k)
-        k = self.w_ks(k).view(sz_b, len_k, n_head, d_k)
-        v = self.w_vs(v).view(sz_b, len_v, n_head, d_v)
-        # Transpose for attention dot product: b x n x lq x dv
-        q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
+        q = self.w_qs(f_q).view(sz_b, len_q, n_head, c, h, w)
+        k = self.w_ks(f_k).view(sz_b, len_k, n_head, c, h, w)
+        v = self.w_vs(f_v).view(sz_b, len_v, n_head, c, h, w)
 
-        if mask is not None:
-            mask = mask.unsqueeze(1)  # For head axis broadcasting.
+        # Transpose for attention dot product: b x n x lq x c x h x w
+        q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
 
         q, attn = self.attention(q, k, v, mask=mask)
 
