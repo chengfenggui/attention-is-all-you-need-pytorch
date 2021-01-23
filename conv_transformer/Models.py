@@ -1,0 +1,127 @@
+''' Define the Transformer model '''
+import torch
+import torch.nn as nn
+import numpy as np
+import torch.nn.functional as F
+from conv_transformer.Layers import EncoderLayer, DecoderLayer
+
+
+class FeatureEmbedding(nn.Module):
+
+    def __init__(self, in_channel=3, d_feature=32, kernel_size=5, negative_slope=0.01):
+        self.negative_slope = negative_slope
+
+        self.conv1 = nn.Conv2d(in_channel, d_feature, kernel_size=kernel_size, padding=(kernel_size - 1) // 2)
+        self.conv2 = nn.Conv2d(in_channel, d_feature, kernel_size=kernel_size, padding=(kernel_size - 1) // 2)
+        self.conv3 = nn.Conv2d(in_channel, d_feature, kernel_size=kernel_size, padding=(kernel_size - 1) // 2)
+        self.conv4 = nn.Conv2d(in_channel, d_feature, kernel_size=kernel_size, padding=(kernel_size - 1) // 2)
+        self.bn1 = nn.BatchNorm2d(d_feature)
+        self.bn2 = nn.BatchNorm2d(d_feature)
+        self.bn3 = nn.BatchNorm2d(d_feature)
+        self.bn4 = nn.BatchNorm2d(d_feature)
+
+    def forward(self, x):
+        # input size: b x c x h x w
+        negative_slope = self.negative_slope
+
+        x = F.leaky_relu(self.bn1(self.conv1(x)), negative_slope=negative_slope, inplace=False)
+        x = F.leaky_relu(self.bn2(self.conv2(x)), negative_slope=negative_slope, inplace=False)
+        x = F.leaky_relu(self.bn3(self.conv3(x)), negative_slope=negative_slope, inplace=False)
+        x = F.leaky_relu(self.bn4(self.conv4(x)), negative_slope=negative_slope, inplace=False)
+
+        return x
+
+
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, d_hid, n_position=200):
+        super(PositionalEncoding, self).__init__()
+
+        # Not a parameter
+        self.register_buffer('pos_table', self._get_sinusoid_encoding_table(n_position, d_hid))
+
+    def _get_sinusoid_encoding_table(self, n_position, d_hid):
+        ''' Sinusoid position encoding table '''
+
+        # TODO: make it with torch instead of numpy
+
+        def get_position_angle_vec(position):
+            return [position / np.power(10000, 2 * (hid_j // 2) / d_hid) for hid_j in range(d_hid)]
+
+        sinusoid_table = np.array([get_position_angle_vec(pos_i) for pos_i in range(n_position)])
+        sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
+        sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
+
+        return torch.FloatTensor(sinusoid_table).unsqueeze(0)
+
+    def forward(self, x):
+        return x + self.pos_table[:, :x.size(1)].clone().detach()
+
+
+class Encoder(nn.Module):
+    ''' A encoder model with self attention mechanism. '''
+
+    def __init__(
+            self, n_layers, h, w, n_head, d_feature,
+            d_model, d_attention, dropout=0.1, n_position=200):
+
+        super().__init__()
+
+        self.position_enc = PositionalEncoding(d_feature, n_position=n_position)
+        self.dropout = nn.Dropout(p=dropout)
+        self.layer_stack = nn.ModuleList([
+            EncoderLayer(h, w, n_head, d_model, d_feature, d_attention, dropout)
+            for _ in range(n_layers)])
+        self.layer_norm = nn.LayerNorm([d_model, h, w], eps=1e-6)
+
+    def forward(self, src_seq, return_attns=False):
+
+        enc_slf_attn_list = []
+
+        # -- Forward
+
+        enc_output = self.dropout(self.position_enc(src_seq))
+        enc_output = self.layer_norm(enc_output)
+
+        for enc_layer in self.layer_stack:
+            enc_output, enc_slf_attn = enc_layer(enc_output)
+            enc_slf_attn_list += [enc_slf_attn] if return_attns else []
+
+        if return_attns:
+            return enc_output, enc_slf_attn_list
+        return enc_output,
+
+
+class Decoder(nn.Module):
+    ''' A decoder model with self attention mechanism. '''
+
+    def __init__(
+            self, n_layers, h, w, n_head, d_feature,
+            d_model, d_attention, dropout=0.1, n_position=200):
+
+        super().__init__()
+
+        self.position_enc = PositionalEncoding(d_feature, n_position=n_position)
+        self.dropout = nn.Dropout(p=dropout)
+        self.layer_stack = nn.ModuleList([
+            DecoderLayer(h, w, n_head, d_model, d_feature, d_attention, dropout)
+            for _ in range(n_layers)])
+        self.layer_norm = nn.LayerNorm([d_model, h, w], eps=1e-6)
+
+    def forward(self, trg_seq, enc_output, return_attns=False):
+
+        dec_slf_attn_list, dec_enc_attn_list = [], []
+
+        # -- Forward
+        dec_output = self.dropout(self.position_enc(trg_seq))
+        dec_output = self.layer_norm(dec_output)
+
+        for dec_layer in self.layer_stack:
+            dec_output, dec_slf_attn, dec_enc_attn = dec_layer(
+                dec_output, enc_output)
+            dec_slf_attn_list += [dec_slf_attn] if return_attns else []
+            dec_enc_attn_list += [dec_enc_attn] if return_attns else []
+
+        if return_attns:
+            return dec_output, dec_slf_attn_list, dec_enc_attn_list
+        return dec_output,

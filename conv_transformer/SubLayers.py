@@ -3,11 +3,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from conv_transofrmer.Modules import ConvolutionalAttention
+from conv_transformer.Modules import ConvolutionalAttention
 
 
 class MultiHeadConvAttention(nn.Module):
-    ''' Multi-Head Attention module '''
+    ''' Multi-Head Convolutional Attention module '''
 
     def __init__(self, n_head, h, w, d_feature=32, d_model=32, d_attention=1, dropout=0.1):
         super().__init__()
@@ -19,11 +19,12 @@ class MultiHeadConvAttention(nn.Module):
         self.h = h
         self.w = w
 
-        self.conv_attentions = [ConvolutionalAttention(d_feature, d_model, d_attention) for _ in n_head]
+        self.conv_attentions = nn.ModuleList(
+            [ConvolutionalAttention(d_feature, d_model, d_attention)
+             for _ in range(n_head)])
         self.fc = nn.Linear(n_head * d_model * h * w, d_model * h * w, bias=False)
 
         self.dropout = nn.Dropout(dropout)
-        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
 
     def forward(self, q, k, v):
         # input feature maps size: b, l, c, h, w
@@ -34,11 +35,10 @@ class MultiHeadConvAttention(nn.Module):
         c, h, w = q.size(2), q.size(3), q.size(4)
         assert self.h == h and self.w == w
 
-        residual = q
         multihead_q = []
         multihead_attn = []
-        for i in n_head:
-            output, attn = self.conv_attentions[i](q, k, v)
+        for head_attention in self.conv_attentions:
+            output, attn = head_attention(q, k, v)
             multihead_q.append(output)
             multihead_attn.append(attn)
 
@@ -46,20 +46,32 @@ class MultiHeadConvAttention(nn.Module):
         # size of attn: n x b x lq x lk x c x h x w
         q, attn = torch.stack(multihead_q), torch.stack(multihead_attn)
 
-        # Transpose to move the head dimension back: b x lq x n x dv
-        # Combine the last two dimensions to concatenate all the heads together: b x lq x (n*dv)
+        # Transpose to move the head dimension back: b x lq x n x c x h x w
+        # Combine the last four dimensions to concatenate all the heads together: b x lq x (n*c*h*w)
         q = q.transpose(0, 1).transpose(1, 2).contiguous().view(sz_b, len_q, -1)
         q = self.fc(q)
-        q = self.layer_norm(q)
         q = q.view(sz_b, len_q, d_model, h, w)
         q = self.dropout(q)
-        q += residual
 
         return q, attn
 
 
-class PositionwiseFeedForward(nn.Module):
-    ''' A two-feed-forward-layer module '''
+class NormResidual(nn.Module):
+    def __init__(self, d_model, h, w):
+        super().__init__()
+        self.layer_norm = nn.LayerNorm([d_model, h, w], eps=1e-6)
+
+    def forward(self, x, q):
+        out = q + x
+        out = self.layer_norm(out)
+
+        return out
+
+
+class FeedForward(nn.Module):
+    ''' A U-Net-like feed-forward network '''
+
+    # TODO: U-Net-like structure
 
     def __init__(self, d_in, d_hid, dropout=0.1):
         super().__init__()
