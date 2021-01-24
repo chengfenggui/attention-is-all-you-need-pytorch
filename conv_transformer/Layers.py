@@ -11,7 +11,7 @@ class EncoderLayer(nn.Module):
         super(EncoderLayer, self).__init__()
         self.slf_attn = MultiHeadConvAttention(n_head, h, w, d_feature, d_model, d_attention, dropout=dropout)
         self.add1 = NormResidual(d_model, h, w)
-        self.ffn = FeedForward(1, 1, dropout=dropout)
+        self.ffn = FeedForward(d_model, dropout=dropout)
         self.add2 = NormResidual(d_model, h, w)
 
     def forward(self, enc_input):
@@ -31,7 +31,7 @@ class DecoderLayer(nn.Module):
         self.add1 = NormResidual(d_model, h, w)
         self.enc_attn = MultiHeadConvAttention(n_head, h, w, d_feature, d_model, d_attention, dropout=dropout)
         self.add2 = NormResidual(d_model, h, w)
-        self.ffn = FeedForward(1, 1, dropout=dropout)
+        self.ffn = FeedForward(d_model, dropout=dropout)
         self.add3 = NormResidual(d_model, h, w)
 
     def forward(

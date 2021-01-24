@@ -7,7 +7,7 @@ class ConvolutionalAttention(nn.Module):
     ''' Convolutional Attention '''
 
     def __init__(self, d_feature=32, d_model=32, d_attention=1, attn_dropout=0.1):
-        super().__init__()
+        super(ConvolutionalAttention, self).__init__()
         self.d_feature = d_feature
         self.d_model = d_model
         self.d_attention = d_attention

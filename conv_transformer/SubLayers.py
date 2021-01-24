@@ -4,13 +4,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from conv_transformer.Modules import ConvolutionalAttention
+from conv_transformer.UNet.Model import UNet
 
 
 class MultiHeadConvAttention(nn.Module):
     ''' Multi-Head Convolutional Attention module '''
 
     def __init__(self, n_head, h, w, d_feature=32, d_model=32, d_attention=1, dropout=0.1):
-        super().__init__()
+        super(MultiHeadConvAttention, self).__init__()
 
         self.n_head = n_head
         self.d_feature = d_feature
@@ -73,20 +74,23 @@ class FeedForward(nn.Module):
 
     # TODO: U-Net-like structure
 
-    def __init__(self, d_in, d_hid, dropout=0.1):
-        super().__init__()
-        self.w_1 = nn.Linear(d_in, d_hid)  # position-wise
-        self.w_2 = nn.Linear(d_hid, d_in)  # position-wise
-        self.layer_norm = nn.LayerNorm(d_in, eps=1e-6)
+    def __init__(self, d_model, dropout=0.1):
+        super(FeedForward, self).__init__()
+
+        self.d_model = d_model
+
+        self.ffn = UNet(in_channels=d_model, out_channels=d_model)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        residual = x
+        # input size: b, l, c, h, w
+        assert x.size(2) == self.d_model
 
-        x = self.w_2(F.relu(self.w_1(x)))
-        x = self.dropout(x)
-        x += residual
+        x = x.transpose(0, 1)
+        out = []
+        for fea in x:
+            out.append(self.ffn(fea))
+        out = torch.stack(out).transpose(0, 1)
+        out = self.dropout(out)
 
-        x = self.layer_norm(x)
-
-        return x
+        return out

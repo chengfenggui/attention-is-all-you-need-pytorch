@@ -9,6 +9,8 @@ from conv_transformer.Layers import EncoderLayer, DecoderLayer
 class FeatureEmbedding(nn.Module):
 
     def __init__(self, in_channel=3, d_feature=32, kernel_size=5, negative_slope=0.01):
+        super(FeatureEmbedding, self).__init__()
+
         self.negative_slope = negative_slope
 
         self.conv1 = nn.Conv2d(in_channel, d_feature, kernel_size=kernel_size, padding=(kernel_size - 1) // 2)
@@ -34,21 +36,23 @@ class FeatureEmbedding(nn.Module):
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_hid, n_position=200):
+    def __init__(self, w, h, d_feature, n_position=7):
         super(PositionalEncoding, self).__init__()
 
         # Not a parameter
-        self.register_buffer('pos_table', self._get_sinusoid_encoding_table(n_position, d_hid))
+        self.register_buffer('pos_table', self._get_sinusoid_encoding_table(n_position, d_feature, w, h))
 
-    def _get_sinusoid_encoding_table(self, n_position, d_hid):
+    def _get_sinusoid_encoding_table(self, n_position, d_feature, batch_size, w, h):
         ''' Sinusoid position encoding table '''
 
-        # TODO: make it with torch instead of numpy
-
         def get_position_angle_vec(position):
-            return [position / np.power(10000, 2 * (hid_j // 2) / d_hid) for hid_j in range(d_hid)]
+            return torch.stack([
+                torch.ones([w, h]) *
+                position / np.power(10000, 2 * (hid_j // 2) / d_feature)
+                for hid_j in range(d_feature)
+            ])
 
-        sinusoid_table = np.array([get_position_angle_vec(pos_i) for pos_i in range(n_position)])
+        sinusoid_table = np.array([get_position_angle_vec(pos_i).numpy() for pos_i in range(n_position)])
         sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
         sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
 
@@ -63,11 +67,10 @@ class Encoder(nn.Module):
 
     def __init__(
             self, n_layers, h, w, n_head, d_feature,
-            d_model, d_attention, dropout=0.1, n_position=200):
+            d_model, d_attention, dropout=0.1):
 
-        super().__init__()
+        super(Encoder, self).__init__()
 
-        self.position_enc = PositionalEncoding(d_feature, n_position=n_position)
         self.dropout = nn.Dropout(p=dropout)
         self.layer_stack = nn.ModuleList([
             EncoderLayer(h, w, n_head, d_model, d_feature, d_attention, dropout)
@@ -97,11 +100,10 @@ class Decoder(nn.Module):
 
     def __init__(
             self, n_layers, h, w, n_head, d_feature,
-            d_model, d_attention, dropout=0.1, n_position=200):
+            d_model, d_attention, dropout=0.1):
 
-        super().__init__()
+        super(Decoder, self).__init__()
 
-        self.position_enc = PositionalEncoding(d_feature, n_position=n_position)
         self.dropout = nn.Dropout(p=dropout)
         self.layer_stack = nn.ModuleList([
             DecoderLayer(h, w, n_head, d_model, d_feature, d_attention, dropout)
