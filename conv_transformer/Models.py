@@ -72,13 +72,13 @@ class Encoder(nn.Module):
 
     def __init__(
             self, n_layers, n_head, d_feature,
-            d_model, d_attention, dropout=0.1):
+            d_model, d_attention, ffn_depth=2, dropout=0.1):
 
         super(Encoder, self).__init__()
 
         self.dropout = nn.Dropout(p=dropout)
         self.layer_stack = nn.ModuleList([
-            EncoderLayer(n_head, d_model, d_feature, d_attention, dropout)
+            EncoderLayer(n_head, d_model, d_feature, d_attention, ffn_depth, dropout)
             for _ in range(n_layers)])
         # self.layer_norm = nn.LayerNorm([d_model, h, w], eps=1e-6)
 
@@ -106,13 +106,13 @@ class Decoder(nn.Module):
 
     def __init__(
             self, n_layers, n_head, d_feature,
-            d_model, d_attention, dropout=0.1):
+            d_model, d_attention, ffn_depth=2, dropout=0.1):
 
         super(Decoder, self).__init__()
 
         self.dropout = nn.Dropout(p=dropout)
         self.layer_stack = nn.ModuleList([
-            DecoderLayer(n_head, d_model, d_feature, d_attention, dropout)
+            DecoderLayer(n_head, d_model, d_feature, d_attention, ffn_depth, dropout)
             for _ in range(n_layers)])
         # self.layer_norm = nn.LayerNorm([d_model, h, w], eps=1e-6)
 

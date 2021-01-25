@@ -71,12 +71,12 @@ class FeedForward(nn.Module):
 
     # TODO: U-Net-like structure
 
-    def __init__(self, d_model, dropout=0.1):
+    def __init__(self, d_model, ffn_depth=2, dropout=0.1):
         super(FeedForward, self).__init__()
 
         self.d_model = d_model
 
-        self.ffn = UNet(in_channels=d_model, out_channels=d_model)
+        self.ffn = UNet(in_channels=d_model, out_channels=d_model, depth=ffn_depth)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):

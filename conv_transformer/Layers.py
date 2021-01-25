@@ -7,10 +7,10 @@ from .SubLayers import MultiHeadConvAttention, Residual, FeedForward
 class EncoderLayer(nn.Module):
     ''' Compose with two layers '''
 
-    def __init__(self, n_head=4, d_model=32, d_feature=32, d_attention=1, dropout=0.1):
+    def __init__(self, n_head=4, d_model=32, d_feature=32, d_attention=1, ffn_depth=2, dropout=0.1):
         super(EncoderLayer, self).__init__()
         self.slf_attn = MultiHeadConvAttention(n_head, d_feature, d_model, d_attention, dropout=dropout)
-        self.ffn = FeedForward(d_model, dropout=dropout)
+        self.ffn = FeedForward(d_model, ffn_depth, dropout=dropout)
 
     def forward(self, enc_input):
         residual = enc_input
@@ -26,11 +26,11 @@ class EncoderLayer(nn.Module):
 class DecoderLayer(nn.Module):
     ''' Compose with three layers '''
 
-    def __init__(self, n_head=4, d_model=32, d_feature=32, d_attention=1, dropout=0.1):
+    def __init__(self, n_head=4, d_model=32, d_feature=32, d_attention=1, ffn_depth=2, dropout=0.1):
         super(DecoderLayer, self).__init__()
         self.slf_attn = MultiHeadConvAttention(n_head, d_feature, d_model, d_attention, dropout=dropout)
         self.enc_attn = MultiHeadConvAttention(n_head, d_feature, d_model, d_attention, dropout=dropout)
-        self.ffn = FeedForward(d_model, dropout=dropout)
+        self.ffn = FeedForward(d_model, ffn_depth, dropout=dropout)
 
     def forward(
             self, dec_input, enc_output):

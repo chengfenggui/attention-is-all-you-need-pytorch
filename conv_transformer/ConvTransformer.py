@@ -7,8 +7,8 @@ class ConvTransformer(nn.Module):
     ''' A sequence to sequence model with attention mechanism. '''
 
     def __init__(
-            self, src_in_channel, trg_in_channel, d_feature=32, n_layers=5, n_head=4,
-            d_model=32, d_attention=1, embedding_kernel=5, dropout=0.1, src_len=7, trg_len=7, slope=0.01,
+            self, src_in_channel, trg_in_channel, src_len=7, trg_len=7, d_feature=32, n_layers=5, n_head=4,
+            d_model=32, d_attention=1, ffn_depth=2, embedding_kernel=5, dropout=0.1, slope=0.01,
             emb_src_trg_weight_sharing=True, src_embedding=False, trg_embedding=False):
 
         super(ConvTransformer, self).__init__()
@@ -29,11 +29,11 @@ class ConvTransformer(nn.Module):
 
         self.encoder = Encoder(
             n_layers=n_layers, n_head=n_head, d_feature=d_feature, d_model=d_model,
-            d_attention=d_attention, dropout=dropout)
+            d_attention=d_attention, ffn_depth=ffn_depth, dropout=dropout)
 
         self.decoder = Decoder(
             n_layers=n_layers, n_head=n_head, d_feature=d_feature, d_model=d_model,
-            d_attention=d_attention, dropout=dropout)
+            d_attention=d_attention, ffn_depth=ffn_depth, dropout=dropout)
 
         for p in self.parameters():
             if p.dim() > 1:
