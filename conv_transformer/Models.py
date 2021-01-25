@@ -36,18 +36,18 @@ class FeatureEmbedding(nn.Module):
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, w, h, d_feature, n_position=7):
+    def __init__(self, d_feature, n_position=7):
         super(PositionalEncoding, self).__init__()
 
-        # Not a parameter
-        self.register_buffer('pos_table', self._get_sinusoid_encoding_table(n_position, d_feature, w, h))
+        self.n_position = n_position
+        self.d_feature = d_feature
 
-    def _get_sinusoid_encoding_table(self, n_position, d_feature, batch_size, w, h):
+    def _get_sinusoid_encoding_table(self, n_position, d_feature, h, w):
         ''' Sinusoid position encoding table '''
 
         def get_position_angle_vec(position):
             return torch.stack([
-                torch.ones([w, h]) *
+                torch.ones([h, w]) *
                 position / np.power(10000, 2 * (hid_j // 2) / d_feature)
                 for hid_j in range(d_feature)
             ])
@@ -59,23 +59,28 @@ class PositionalEncoding(nn.Module):
         return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
     def forward(self, x):
-        return x + self.pos_table[:, :x.size(1)].clone().detach()
+        n_position = self.n_position
+        d_feature = self.d_feature
+        b, l, c, h, w = x.size()
+
+        pos_table = self._get_sinusoid_encoding_table(n_position, d_feature, h, w)
+        return x + pos_table[:, :l].clone().detach()
 
 
 class Encoder(nn.Module):
     ''' A encoder model with self attention mechanism. '''
 
     def __init__(
-            self, n_layers, h, w, n_head, d_feature,
+            self, n_layers, n_head, d_feature,
             d_model, d_attention, dropout=0.1):
 
         super(Encoder, self).__init__()
 
         self.dropout = nn.Dropout(p=dropout)
         self.layer_stack = nn.ModuleList([
-            EncoderLayer(h, w, n_head, d_model, d_feature, d_attention, dropout)
+            EncoderLayer(n_head, d_model, d_feature, d_attention, dropout)
             for _ in range(n_layers)])
-        self.layer_norm = nn.LayerNorm([d_model, h, w], eps=1e-6)
+        # self.layer_norm = nn.LayerNorm([d_model, h, w], eps=1e-6)
 
     def forward(self, src_seq, return_attns=False):
 
@@ -84,14 +89,15 @@ class Encoder(nn.Module):
         # -- Forward
 
         enc_output = self.dropout(self.position_enc(src_seq))
-        enc_output = self.layer_norm(enc_output)
+        # enc_output = self.layer_norm(enc_output)
 
         for enc_layer in self.layer_stack:
             enc_output, enc_slf_attn = enc_layer(enc_output)
             enc_slf_attn_list += [enc_slf_attn] if return_attns else []
 
         if return_attns:
-            return enc_output, enc_slf_attn_list
+            # enc_slf_attn_list size: b x layer_stack x head x lq x lk x c x h x w
+            return enc_output, torch.stack(enc_slf_attn_list).transpose(0, 1)
         return enc_output,
 
 
@@ -99,16 +105,16 @@ class Decoder(nn.Module):
     ''' A decoder model with self attention mechanism. '''
 
     def __init__(
-            self, n_layers, h, w, n_head, d_feature,
+            self, n_layers, n_head, d_feature,
             d_model, d_attention, dropout=0.1):
 
         super(Decoder, self).__init__()
 
         self.dropout = nn.Dropout(p=dropout)
         self.layer_stack = nn.ModuleList([
-            DecoderLayer(h, w, n_head, d_model, d_feature, d_attention, dropout)
+            DecoderLayer(n_head, d_model, d_feature, d_attention, dropout)
             for _ in range(n_layers)])
-        self.layer_norm = nn.LayerNorm([d_model, h, w], eps=1e-6)
+        # self.layer_norm = nn.LayerNorm([d_model, h, w], eps=1e-6)
 
     def forward(self, trg_seq, enc_output, return_attns=False):
 
@@ -116,7 +122,7 @@ class Decoder(nn.Module):
 
         # -- Forward
         dec_output = self.dropout(self.position_enc(trg_seq))
-        dec_output = self.layer_norm(dec_output)
+        # dec_output = self.layer_norm(dec_output)
 
         for dec_layer in self.layer_stack:
             dec_output, dec_slf_attn, dec_enc_attn = dec_layer(
@@ -125,5 +131,6 @@ class Decoder(nn.Module):
             dec_enc_attn_list += [dec_enc_attn] if return_attns else []
 
         if return_attns:
-            return dec_output, dec_slf_attn_list, dec_enc_attn_list
+            return dec_output, torch.stack(dec_slf_attn_list).transpose(0, 1), \
+                   torch.stack(dec_enc_attn_list).transpose(0, 1)
         return dec_output,
