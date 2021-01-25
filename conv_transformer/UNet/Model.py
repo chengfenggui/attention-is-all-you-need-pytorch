@@ -1,43 +1,45 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from conv_transformer.UNet.Parts import DoubleConv, Down, Up, OutConv
+from .Parts import DoubleConv, Down, Up, OutConv
 
 
 class UNet(nn.Module):
-    def __init__(self, in_channels, out_channels, bilinear=True):
+    def __init__(self, in_channels, out_channels, depth=2, bilinear=True):
         super(UNet, self).__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.bilinear = bilinear
+        self.depth = depth
 
-        self.inc = DoubleConv(in_channels=in_channels, out_channels=64)
-        self.down1 = Down(64, 128)
-        self.down2 = Down(128, 256)
-        self.down3 = Down(256, 512)
-        self.down4 = Down(512, 1024)
+        init_channels = 64 if in_channels <= 32 else in_channels * 2
+        channels = [init_channels * 2 ** i for i in range(depth + 1)]
+
+        self.inc = DoubleConv(in_channels=in_channels, out_channels=init_channels)
+        self.downs = nn.ModuleList(
+            [Down(channels[i], channels[i + 1]) for i in range(depth)]
+        )
 
         factor = 2 if bilinear else 1
 
-        self.up1 = Up(1024, 512 // factor, bilinear)
-        self.up2 = Up(512, 256 // factor, bilinear)
-        self.up3 = Up(256, 128 // factor, bilinear)
-        self.up4 = Up(128, 64, bilinear)
-        self.outc = OutConv(64, out_channels)
+        out_modules = [Up(channels[depth - i], channels[depth - i - 1] // factor, bilinear) for i in range(depth - 1)]
+        out_modules.append(Up(channels[1], channels[0], bilinear))
+
+        self.ups = nn.ModuleList(out_modules)
+        self.outc = OutConv(init_channels, out_channels)
 
     def forward(self, x):
-        x1 = self.inc(x)
+        depth = self.depth
+        xs = []
+        xs.append(self.inc(x))
 
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        x5 = self.down4(x4)
+        for i in range(depth):
+            xs.append(self.downs[i](xs[i]))
 
-        x = self.up1(x5, x4)
-        x = self.up2(x, x3)
-        x = self.up3(x, x2)
-        x = self.up4(x, x1)
+        x = self.ups[0](xs[-1], xs[-2])
+        for i in range(depth - 1):
+            x = self.ups[i + 1](x, xs[-i - 3])
 
         x = self.outc(x)
 

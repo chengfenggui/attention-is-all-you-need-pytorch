@@ -1,7 +1,7 @@
 ''' Define the Layers '''
 import torch.nn as nn
 import torch
-from conv_transformer.SubLayers import MultiHeadConvAttention, Residual, FeedForward
+from .SubLayers import MultiHeadConvAttention, Residual, FeedForward
 
 
 class EncoderLayer(nn.Module):

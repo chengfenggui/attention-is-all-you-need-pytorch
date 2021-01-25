@@ -3,8 +3,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from conv_transformer.Modules import ConvolutionalAttention
-from conv_transformer.UNet.Model import UNet
+from .Modules import ConvolutionalAttention
+from .UNet.Model import UNet
 
 
 class MultiHeadConvAttention(nn.Module):

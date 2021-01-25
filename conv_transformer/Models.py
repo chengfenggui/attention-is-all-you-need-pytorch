@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
-from conv_transformer.Layers import EncoderLayer, DecoderLayer
+from .Layers import EncoderLayer, DecoderLayer
 
 
 class FeatureEmbedding(nn.Module):

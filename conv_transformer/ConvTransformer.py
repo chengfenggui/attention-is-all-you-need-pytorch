@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from conv_transformer.Models import Encoder, Decoder, FeatureEmbedding, PositionalEncoding
+from .Models import Encoder, Decoder, FeatureEmbedding, PositionalEncoding
 
 
 class ConvTransformer(nn.Module):
