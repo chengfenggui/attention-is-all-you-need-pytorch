@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .Modules import ConvolutionalAttention
 from .UNet.Model import UNet
+from .UNet.Parts import DoubleConv
 
 
 class MultiHeadConvAttention(nn.Module):
@@ -69,14 +70,13 @@ class Residual(nn.Module):
 class FeedForward(nn.Module):
     ''' A U-Net-like feed-forward network '''
 
-    # TODO: U-Net-like structure
-
     def __init__(self, d_model, ffn_depth=2, dropout=0.1):
         super(FeedForward, self).__init__()
 
         self.d_model = d_model
 
-        self.ffn = UNet(in_channels=d_model, out_channels=d_model, depth=ffn_depth)
+        # self.ffn = UNet(in_channels=d_model, out_channels=d_model, depth=ffn_depth)
+        self.ffn = DoubleConv(in_channels=d_model, out_channels=d_model, mid_channels=2 * d_model)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
