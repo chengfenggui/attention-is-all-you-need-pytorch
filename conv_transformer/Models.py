@@ -63,7 +63,7 @@ class PositionalEncoding(nn.Module):
         d_feature = self.d_feature
         b, l, c, h, w = x.size()
 
-        pos_table = self._get_sinusoid_encoding_table(n_position, d_feature, h, w)
+        pos_table = self._get_sinusoid_encoding_table(n_position, d_feature, h, w).cuda()
         return x + pos_table[:, :l].clone().detach()
 
 
@@ -88,7 +88,7 @@ class Encoder(nn.Module):
 
         # -- Forward
 
-        enc_output = self.dropout(self.position_enc(src_seq))
+        enc_output = self.dropout(src_seq)
         # enc_output = self.layer_norm(enc_output)
 
         for enc_layer in self.layer_stack:
@@ -121,7 +121,7 @@ class Decoder(nn.Module):
         dec_slf_attn_list, dec_enc_attn_list = [], []
 
         # -- Forward
-        dec_output = self.dropout(self.position_enc(trg_seq))
+        dec_output = self.dropout(trg_seq)
         # dec_output = self.layer_norm(dec_output)
 
         for dec_layer in self.layer_stack:

@@ -1,54 +1,36 @@
 import torch
 import torch.nn as nn
+import numpy as np
 import torch.nn.functional as F
 
 
-class ConvolutionalAttention(nn.Module):
-    ''' Convolutional Attention '''
+class SEResblock(nn.Module):
+    def __init__(self, in_channel, out_channel, mid_channel, stride=1):
+        super(SEResblock, self).__init__()
+        if in_channel == out_channel and stride == 1:
+            self.conv0 = nn.Identity()
+        else:
+            self.conv0 = nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride, padding=1, bias=False)
 
-    def __init__(self, d_feature=32, d_model=32, d_attention=1, attn_dropout=0.1):
-        super(ConvolutionalAttention, self).__init__()
-        self.d_feature = d_feature
-        self.d_model = d_model
-        self.d_attention = d_attention
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride, padding=1),
+            nn.BatchNorm2d(out_channel),
+            nn.PReLU(out_channel)
+        )
 
-        self.conv_qs = nn.Conv2d(d_feature, d_model, kernel_size=1)
-        self.conv_ks = nn.Conv2d(d_feature, d_model, kernel_size=1)
-        self.conv_vs = nn.Conv2d(d_feature, d_model, kernel_size=1)
-        self.conv_attenion = nn.Conv2d(d_model, d_attention, kernel_size=5, padding=2)
-        self.dropout = nn.Dropout(attn_dropout)
+        self.conv2 = nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=stride, padding=1)
+        self.prelu1 = nn.PReLU(1)
+        self.prelu2 = nn.PReLU(out_channel)
+        self.fc1 = nn.Conv2d(out_channel, mid_channel, kernel_size=1, bias=False)
+        self.fc2 = nn.Conv2d(mid_channel, out_channel, kernel_size=1, bias=False)
 
-    def forward(self, q, k, v):
-        # input size of: b x l x c x h x w
-        d_feature = self.d_feature
-        d_model = self.d_model
+    def forward(self, x):
+        y = self.conv0(x)
 
-        sz_b, len_q, len_k, len_v = q.size(0), q.size(1), k.size(1), v.size(1)
-        c, h, w = q.size(2), q.size(3), q.size(4)
-        assert len_k == len_v and c == d_feature
-
-        q, k, v = q.transpose(0, 1), k.transpose(0, 1), v.transpose(0, 1)
-
-        # Pass through the pre-attention projection: l x b x c x h x w
-        q = torch.stack([self.conv_qs(x) for x in q]).view(len_q, sz_b, d_model, h, w)
-        k = torch.stack([self.conv_ks(x) for x in k]).view(len_k, sz_b, d_model, h, w)
-        v = torch.stack([self.conv_vs(x) for x in v]).view(len_v, sz_b, d_model, h, w)
-
-        output = []
-        attentions = []
-        for i in len_q:
-            qk = torch.stack([q[i, ...]] * len_k) + k
-            attn = torch.stack([self.conv_attenion(x) for x in qk])
-            attn = F.softmax(attn, dim=0)
-            attn = self.dropout(attn)
-
-            res = torch.mul(attn, v).sum(dim=0)
-            output.append(res)
-            attentions.append(attn.transpose(0, 1))
-
-        output = torch.stack(output).transpose(0, 1)
-        attentions = torch.stack(attentions).transpose(0, 1)
-
-        # output size: b x lq x c x h x w
-        # attentions size: b x lq x lk x c x h x w
-        return output, attentions
+        x = self.conv1(x)
+        x = self.conv2(x)
+        w = x.mean(3, True).mean(2, True)
+        w = self.prelu1(self.fc1(w))
+        w = torch.sigmoid(self.fc2(w))
+        x = self.prelu2(x * w + y)
+        return x

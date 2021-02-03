@@ -39,7 +39,7 @@ class ConvTransformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-        if emb_src_trg_weight_sharing and src_in_channel == trg_in_channel:
+        if emb_src_trg_weight_sharing and src_in_channel == trg_in_channel and src_embedding and trg_embedding:
             self.src_fea_embedding.weight = self.trg_fea_embedding.weight
 
     def forward(self, src_seq, trg_seq, return_attns=False):
@@ -78,4 +78,4 @@ class ConvTransformer(nn.Module):
         else:
             enc_output, *_ = self.encoder(src_seq, return_attns=return_attns)
             dec_output, *_ = self.decoder(trg_seq, enc_output, return_attns=return_attns)
-            return dec_output
+            return dec_output,
